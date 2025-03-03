@@ -1,0 +1,145 @@
+---
+- name: Install Docker
+  become: true
+  apt:
+    name: docker.io
+    state: present
+  tags: docker
+  with_items: "{{ groups.get('vRUH') }}"
+  delegate_to: "{{ item }}"
+  delegate_facts: true
+
+- name: Start Docker
+  become: true
+  service:
+    name: docker
+    state: started
+    enabled: yes
+  tags: docker
+  with_items: "{{ groups.get('vRUH') }}"
+  delegate_to: "{{ item }}"
+  delegate_facts: true
+
+- name: Create destination directory if not exists
+  become: true
+  file:
+    path: "/etc/docker/certs.d/drutio:443/"
+    state: directory
+    mode: 0755
+  with_items: "{{ groups.get('vRUH') }}"
+  delegate_to: "{{ item }}"
+  delegate_facts: true
+
+- name: Create destination directory if not exists
+  become: true
+  file:
+    path: "/etc/containerd/certs.d/drutio:443/"
+    state: directory
+    mode: 0755
+  with_items: "{{ groups.get('vRUH') }}"
+  delegate_to: "{{ item }}"
+  delegate_facts: true
+
+- name: Create destination directory if not exists
+  become: true
+  file:
+    path: "/usr/local/share/ca-certificates/"
+    state: directory
+    mode: 0755
+  with_items: "{{ groups.get('vRUH') }}"
+  delegate_to: "{{ item }}"
+  delegate_facts: true
+
+- name: "Copy cert file"
+  become: true
+  ansible.builtin.template:
+    src: ./../templates/drutio:443/ca.crt
+    dest: "/etc/containerd/certs.d/drutio:443/ca.crt"
+    owner: root
+    group: root
+    mode: 0755
+  with_items: "{{ groups.get('vRUH') }}"
+  delegate_to: "{{ item }}"
+  delegate_facts: true
+
+- name: "Copy cert file"
+  become: true
+  ansible.builtin.template:
+    src: ./../templates/drutio:443/ca.crt
+    dest: "/etc/docker/certs.d/drutio:443/ca.crt"
+    owner: root
+    group: root
+    mode: 0755
+  with_items: "{{ groups.get('vRUH') }}"
+  delegate_to: "{{ item }}"
+  delegate_facts: true
+
+- name: "Copy cert file"
+  become: true
+  ansible.builtin.template:
+    src: ./../templates/drutio:443/ca.crt
+    dest: "/usr/local/share/ca-certificates/drutio_ca.crt"
+    owner: root
+    group: root
+    mode: 0755
+  with_items: "{{ groups.get('vRUH') }}"
+  delegate_to: "{{ item }}"
+  delegate_facts: true
+
+- name: Update CA certificates
+  become: true
+  command: update-ca-certificates
+  with_items: "{{ groups.get('vRUH') }}"
+  delegate_to: "{{ item }}"
+  delegate_facts: true
+
+- name: containerd Restart
+  become: true
+  service:
+    name: docker
+    state: restarted
+  with_items: "{{ groups.get('vRUH') }}"
+  delegate_to: "{{ item }}"
+  delegate_facts: true
+
+- name: Install pip for Python 3 (pip3)
+  become: yes
+  package:
+    name: python3-pip
+    state: present
+  with_items: "{{ groups.get('vRUH') }}"
+  delegate_to: "{{ item }}"
+  delegate_facts: true
+
+- name: Install docker Python library using pip3
+  become: yes
+  pip:
+    name: docker
+    executable: pip3
+    state: present
+  with_items: "{{ groups.get('vRUH') }}"
+  delegate_to: "{{ item }}"
+  delegate_facts: true
+
+- name: Check drutio:443 is reachable
+  become: true
+  uri:
+    url: "https://drutio:443"
+    validate_certs: no
+    timeout: 10
+  with_items: "{{ groups.get('vRUH') }}"
+  delegate_to: "{{ item }}"
+  delegate_facts: true
+  ignore_errors: yes
+  register: drutio443_status
+
+- name: Log in to Docker registry
+  become: true
+  docker_login:
+    username: drut
+    password: Drut2020
+    registry_url: drutio:443
+  with_items: "{{ drutio443_status.results }}"
+  when: item.status == 200 or item.failed == false
+  delegate_to: "{{ item.item }}"
+  delegate_facts: true
